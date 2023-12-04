@@ -217,15 +217,16 @@ impl CommitComponent {
 		let msg = self.input.get_text().to_string();
 
 		if gpgsign {
-			let escaped_msg = msg.replace("\"", "\\\"");
-			let commit = `git commit -m "${escaped_msg}"`;
+			let escaped_msg: &str = &msg.replace("\"", "\\\"");
+			let commit = format!("git commit -m \"{escaped_msg}\"");
+
 			let output = std::process::Command::new("sh")
 				.arg("-c")
 				.arg(commit)
 				.output()
 				.expect("failed to execute process");
 			
-			if(output.status.success()){
+			if output.status.success() {
 				self.options
 					.borrow_mut()
 					.add_commit_msg(self.input.get_text());
