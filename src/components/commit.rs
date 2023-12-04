@@ -214,24 +214,51 @@ impl CommitComponent {
 				.and_then(|path| path.parse::<bool>().ok())
 				.unwrap_or_default();
 
-		if gpgsign {
-			anyhow::bail!("config commit.gpgsign=true detected.\ngpg signing not supported.\ndeactivate in your repo/gitconfig to be able to commit without signing.");
-		}
-
 		let msg = self.input.get_text().to_string();
 
-		if matches!(
-			self.commit_with_msg(msg)?,
-			CommitResult::ComitDone
-		) {
-			self.options
-				.borrow_mut()
-				.add_commit_msg(self.input.get_text());
-			self.commit_msg_history_idx = 0;
+		if gpgsign {
+			let escaped_msg = msg.replace("\"", "\\\"");
+			let commit = `git commit -m "${escaped_msg}"`;
+			let output = std::process::Command::new("sh")
+				.arg("-c")
+				.arg(commit)
+				.output()
+				.expect("failed to execute process");
+			
+			if(output.status.success()){
+				self.options
+					.borrow_mut()
+					.add_commit_msg(self.input.get_text());
+				self.commit_msg_history_idx = 0;
 
-			self.hide();
-			self.queue.push(InternalEvent::Update(NeedsUpdate::ALL));
-			self.input.clear();
+				self.hide();
+				self.queue.push(InternalEvent::Update(NeedsUpdate::ALL));
+				self.input.clear();
+			}
+			else
+			{
+				let e = String::from_utf8_lossy(&output.stderr);
+				log::error!("commit-msg hook error: {}", e);
+				self.queue.push(InternalEvent::ShowErrorMsg(
+					format!("commit-msg hook error:\n{e}"),
+				));				
+			}
+			//anyhow::bail!("config commit.gpgsign=true detected.\ngpg signing not supported.\ndeactivate in your repo/gitconfig to be able to commit without signing.");
+		}
+		else{
+			if matches!(
+				self.commit_with_msg(msg)?,
+				CommitResult::ComitDone
+			) {
+				self.options
+					.borrow_mut()
+					.add_commit_msg(self.input.get_text());
+				self.commit_msg_history_idx = 0;
+
+				self.hide();
+				self.queue.push(InternalEvent::Update(NeedsUpdate::ALL));
+				self.input.clear();
+			}
 		}
 
 		Ok(())
